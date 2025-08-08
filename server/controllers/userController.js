@@ -1,7 +1,7 @@
 // --- ADDED FOR DEBUGGING ---
 console.log("--- userController.js file has been loaded by the server ---");
 
-const { User } = require('../models/User');
+const User = require('../models/User');
 const { Character } = require('../models/Character');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -29,8 +29,10 @@ const registerUser = async (req, res) => {
       name: newUser.username,
     });
     await newCharacter.save();
-    newUser.characterId = newCharacter.character._id;
+    
+    newUser.characterId = newCharacter._id;
     await newUser.save();
+    
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     
     // --- ADDED FOR DEBUGGING ---
