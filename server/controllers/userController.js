@@ -1,9 +1,19 @@
+// --- ADDED FOR DEBUGGING ---
+console.log("--- userController.js file has been loaded by the server ---");
+
 const { User } = require('../models/User');
 const { Character } = require('../models/Character');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+// --- ADDED FOR DEBUGGING ---
+console.log("--- All dependencies for userController.js loaded successfully ---");
+
+
 const registerUser = async (req, res) => {
+  // --- ADDED FOR DEBUGGING ---
+  console.log("--- REGISTER function started ---");
+  
   const { username, email, password } = req.body;
   try {
     const userExists = await User.findOne({ email });
@@ -19,9 +29,12 @@ const registerUser = async (req, res) => {
       name: newUser.username,
     });
     await newCharacter.save();
-    newUser.characterId = newCharacter._id;
+    newUser.characterId = newCharacter.character._id;
     await newUser.save();
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    
+    // --- ADDED FOR DEBUGGING ---
+    console.log("--- REGISTER function successful ---");
     res.status(201).json({
       _id: newUser._id,
       username: newUser.username,
@@ -29,11 +42,17 @@ const registerUser = async (req, res) => {
       token,
     });
   } catch (error) {
+    // --- ADDED FOR DEBUGGING ---
+    console.error("---!!! ERROR IN REGISTER FUNCTION !!!---");
+    console.error(error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
 
 const loginUser = async (req, res) => {
+  // --- ADDED FOR DEBUGGING ---
+  console.log("--- LOGIN function started ---");
+
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
@@ -45,6 +64,9 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+    // --- ADDED FOR DEBUGGING ---
+    console.log("--- LOGIN function successful ---");
     res.status(200).json({
       _id: user._id,
       username: user.username,
@@ -52,10 +74,12 @@ const loginUser = async (req, res) => {
       token,
     });
   } catch (error) {
+    // --- ADDED FOR DEBUGGING ---
+    console.error("---!!! ERROR IN LOGIN FUNCTION !!!---");
+    console.error(error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
-
 
 const getCharacterForUser = async (req, res) => {
   try {
