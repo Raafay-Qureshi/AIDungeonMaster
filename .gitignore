@@ -17,3 +17,16 @@ client/dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Uploads and generated content
+server/uploads/
+uploads/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Temporary files
+temp/
+tmp/

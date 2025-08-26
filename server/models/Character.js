@@ -6,6 +6,10 @@ const lootItemSchema = new mongoose.Schema({
   description: { type: String },
   type: { type: String },
   imagePrompt: { type: String },
+  imageUrl: { type: String }, // Store the generated image URL/path
+  questName: { type: String }, // Store which quest this item came from
+  projectName: { type: String }, // Store which project the quest belonged to
+  completedAt: { type: Date, default: Date.now }, // When the item was obtained
 }, { _id: false });
 
 const characterSchema = new mongoose.Schema({
