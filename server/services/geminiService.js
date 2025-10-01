@@ -11,6 +11,12 @@ const openrouter = axios.create({
 const parseAIResponse = (aiResponse) => {
   const content = aiResponse.data.choices[0].message.content;
   
+  // Check if content is empty or undefined
+  if (!content || content.trim() === '') {
+    console.error('AI returned an empty response');
+    throw new Error('AI service returned an empty response');
+  }
+  
   // Remove markdown code blocks
   let cleanedText = content.replace(/```json/g, '').replace(/```/g, '');
   
@@ -22,6 +28,13 @@ const parseAIResponse = (aiResponse) => {
   
   // Remove any leading/trailing whitespace and newlines
   cleanedText = cleanedText.trim();
+  
+  // Check if cleaned text is empty
+  if (!cleanedText) {
+    console.error('Cleaned text is empty after processing');
+    console.error('Original content:', content);
+    throw new Error('No valid content found in AI response after cleaning');
+  }
   
   // Try to extract JSON from the cleaned text if it's embedded in other text
   const jsonMatch = cleanedText.match(/\[[\s\S]*\]|\{[\s\S]*\}/);

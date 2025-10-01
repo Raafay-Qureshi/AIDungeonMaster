@@ -11,7 +11,19 @@ const completeQuest = async (req, res) => {
       return res.status(404).json({ message: 'Quest or character not found, or quest already completed.' });
     }
 
-    const newLoot = await getLootFromAI(quest.task);
+    let newLoot;
+    try {
+      newLoot = await getLootFromAI(quest.task);
+    } catch (aiError) {
+      console.error('AI loot generation failed, using fallback:', aiError.message);
+      // Fallback loot if AI fails
+      newLoot = {
+        itemName: 'Adventurer\'s Token',
+        description: 'A simple token commemorating your achievement. The Dungeon Master was too busy to craft proper loot.',
+        type: 'Trinket',
+        imagePrompt: 'Simple bronze coin with adventurer emblem, game icon style, transparent background'
+      };
+    }
 
     character.inventory.push(newLoot);
     character.xp += quest.xpReward;
