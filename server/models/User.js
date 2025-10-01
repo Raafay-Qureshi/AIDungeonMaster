@@ -19,6 +19,12 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Character',
   },
+  refreshToken: {
+    type: String,
+  },
+  refreshTokenExpiresAt: {
+    type: Date,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

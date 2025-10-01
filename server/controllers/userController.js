@@ -5,10 +5,19 @@ const User = require('../models/User');
 const { Character } = require('../models/Character');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 // --- ADDED FOR DEBUGGING ---
 console.log("--- All dependencies for userController.js loaded successfully ---");
 
+// Helper function to generate tokens
+const generateTokens = async (userId) => {
+  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  const refreshToken = crypto.randomBytes(64).toString('hex');
+  const refreshTokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  
+  return { accessToken, refreshToken, refreshTokenExpiresAt };
+};
 
 const registerUser = async (req, res) => {
   // --- ADDED FOR DEBUGGING ---
@@ -31,9 +40,14 @@ const registerUser = async (req, res) => {
     await newCharacter.save();
     
     newUser.characterId = newCharacter._id;
-    await newUser.save();
     
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    // Generate tokens
+    const { accessToken, refreshToken, refreshTokenExpiresAt } = await generateTokens(newUser._id);
+    
+    // Save refresh token to user
+    newUser.refreshToken = refreshToken;
+    newUser.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    await newUser.save();
     
     // --- ADDED FOR DEBUGGING ---
     console.log("--- REGISTER function successful ---");
@@ -41,7 +55,8 @@ const registerUser = async (req, res) => {
       _id: newUser._id,
       username: newUser.username,
       email: newUser.email,
-      token,
+      token: accessToken,
+      refreshToken,
     });
   } catch (error) {
     // --- ADDED FOR DEBUGGING ---
@@ -65,7 +80,13 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    // Generate tokens
+    const { accessToken, refreshToken, refreshTokenExpiresAt } = await generateTokens(user._id);
+    
+    // Save refresh token to user
+    user.refreshToken = refreshToken;
+    user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    await user.save();
 
     // --- ADDED FOR DEBUGGING ---
     console.log("--- LOGIN function successful ---");
@@ -73,12 +94,49 @@ const loginUser = async (req, res) => {
       _id: user._id,
       username: user.username,
       email: user.email,
-      token,
+      token: accessToken,
+      refreshToken,
     });
   } catch (error) {
     // --- ADDED FOR DEBUGGING ---
     console.error("---!!! ERROR IN LOGIN FUNCTION !!!---");
     console.error(error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+const refreshToken = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'Refresh token required' });
+  }
+
+  try {
+    // Find user with this refresh token
+    const user = await User.findOne({
+      refreshToken,
+      refreshTokenExpiresAt: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid or expired refresh token' });
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken, refreshTokenExpiresAt } = await generateTokens(user._id);
+
+    // Update user's refresh token
+    user.refreshToken = newRefreshToken;
+    user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    await user.save();
+
+    res.status(200).json({
+      token: accessToken,
+      refreshToken: newRefreshToken,
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
@@ -95,5 +153,22 @@ const getCharacterForUser = async (req, res) => {
   }
 };
 
+const logoutUser = async (req, res) => {
+  try {
+    // Clear the refresh token from the database
+    const user = await User.findById(req.user.id);
+    if (user) {
+      user.refreshToken = null;
+      user.refreshTokenExpiresAt = null;
+      await user.save();
+    }
 
-module.exports = { registerUser, loginUser, getCharacterForUser };
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+
+module.exports = { registerUser, loginUser, refreshToken, getCharacterForUser, logoutUser };

@@ -10,8 +10,33 @@ const openrouter = axios.create({
 
 const parseAIResponse = (aiResponse) => {
   const content = aiResponse.data.choices[0].message.content;
-  const cleanedText = content.replace(/```json/g, '').replace(/```/g, '');
-  return JSON.parse(cleanedText);
+  
+  // Remove markdown code blocks
+  let cleanedText = content.replace(/```json/g, '').replace(/```/g, '');
+  
+  // Remove special tokens that might be present in the response
+  cleanedText = cleanedText.replace(/<s>/g, '').replace(/<\/s>/g, '');
+  cleanedText = cleanedText.replace(/\[OUT\]/g, '').replace(/\[\/OUT\]/g, '');
+  cleanedText = cleanedText.replace(/\[INST\]/g, '').replace(/\[\/INST\]/g, '');
+  cleanedText = cleanedText.replace(/\[B_INST\]/g, '').replace(/\[\/B_INST\]/g, '');
+  
+  // Remove any leading/trailing whitespace and newlines
+  cleanedText = cleanedText.trim();
+  
+  // Try to extract JSON from the cleaned text if it's embedded in other text
+  const jsonMatch = cleanedText.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  if (jsonMatch) {
+    cleanedText = jsonMatch[0];
+  }
+  
+  try {
+    return JSON.parse(cleanedText);
+  } catch (error) {
+    console.error('Failed to parse AI response as JSON:', error);
+    console.error('Original content:', content);
+    console.error('Cleaned text:', cleanedText);
+    throw new Error(`Invalid JSON response from AI service: ${error.message}`);
+  }
 };
 
 const getQuestsFromAI = async (goal) => {
