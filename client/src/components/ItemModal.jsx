@@ -1,23 +1,58 @@
-import React from 'react';
+import React, { useState } from 'react';
+import api from '../api';
+import useAuthStore from '../store/authStore';
 
 const ItemModal = ({ item, isOpen, onClose }) => {
+    const [isDeleting, setIsDeleting] = useState(false);
+    const { setCharacter } = useAuthStore();
+
     if (!isOpen || !item) return null;
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:1002/api';
     const imageUrl = item.imageUrl ? `${API_URL}/images/${item.imageUrl}` : null;
     
-    // Debug logging
-    console.log('ItemModal - item:', item);
-    console.log('ItemModal - item.imageUrl:', item.imageUrl);
-    console.log('ItemModal - constructed imageUrl:', imageUrl);
-    console.log('ItemModal - API_URL:', API_URL);
+    // Rarity colors (Fortnite-style)
+    const rarityColors = {
+        'Common': 'text-gray-400 border-gray-500 bg-gray-700',
+        'Uncommon': 'text-green-400 border-green-500 bg-green-900/30',
+        'Rare': 'text-blue-400 border-blue-500 bg-blue-900/30',
+        'Epic': 'text-purple-400 border-purple-500 bg-purple-900/30',
+        'Legendary': 'text-yellow-400 border-yellow-500 bg-yellow-900/30'
+    };
+    
+    const rarityColor = rarityColors[item.rarity] || rarityColors['Common'];
+    
+    const handleDelete = async () => {
+        if (!confirm(`Are you sure you want to delete ${item.itemName}?`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        try {
+            const response = await api.delete(`/users/inventory/${encodeURIComponent(item.itemName)}`);
+            setCharacter(response.data.character);
+            onClose();
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            alert('Failed to delete item. Please try again.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
             <div className="bg-gray-800 p-6 rounded-lg max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-700" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-2xl font-bold text-yellow-400">{item.itemName}</h2>
-                    <button 
+                    <div>
+                        <h2 className={`text-2xl font-bold ${rarityColor.split(' ')[0]}`}>{item.itemName}</h2>
+                        {item.rarity && (
+                            <span className={`inline-block mt-2 px-3 py-1 rounded border ${rarityColor} text-sm font-semibold`}>
+                                {item.rarity}
+                            </span>
+                        )}
+                    </div>
+                    <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-white text-2xl"
                     >
@@ -26,18 +61,23 @@ const ItemModal = ({ item, isOpen, onClose }) => {
                 </div>
 
                 {/* Enlarged Image */}
-                <div className="mb-6">
+                <div className={`mb-6 border-2 rounded-lg ${rarityColor.split(' ').slice(1).join(' ')}`}>
                     {imageUrl ? (
                         <div className="bg-gray-900 rounded-lg p-4 flex items-center justify-center">
-                            <img 
-                                src={imageUrl} 
-                                alt={item.itemName} 
+                            <img
+                                src={imageUrl}
+                                alt={item.itemName}
                                 className="max-w-full max-h-96 object-contain rounded"
+                                onLoad={(e) => console.log('Image loaded successfully:', imageUrl)}
+                                onError={(e) => {
+                                    console.error('Image failed to load:', imageUrl);
+                                    e.target.parentElement.innerHTML = '<p class="text-gray-500">Image failed to load</p>';
+                                }}
                             />
                         </div>
                     ) : (
                         <div className="bg-gray-900 rounded-lg p-8 flex items-center justify-center">
-                            <p className="text-gray-500">No image available</p>
+                            <p className="text-gray-500">Generating image...</p>
                         </div>
                     )}
                 </div>
@@ -86,9 +126,16 @@ const ItemModal = ({ item, isOpen, onClose }) => {
                     )}
                 </div>
 
-                {/* Close Button */}
-                <div className="mt-6 flex justify-end">
-                    <button 
+                {/* Action Buttons */}
+                <div className="mt-6 flex justify-between">
+                    <button
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white rounded transition-colors"
+                    >
+                        {isDeleting ? 'Deleting...' : 'Delete Item'}
+                    </button>
+                    <button
                         onClick={onClose}
                         className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
                     >

@@ -5,6 +5,7 @@ const lootItemSchema = new mongoose.Schema({
   itemName: { type: String, required: true },
   description: { type: String },
   type: { type: String },
+  rarity: { type: String, enum: ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'], default: 'Common' },
   imagePrompt: { type: String },
   imageUrl: { type: String }, // Store the generated image URL/path
   questName: { type: String }, // Store which quest this item came from

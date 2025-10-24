@@ -2,21 +2,28 @@ import React, { useState, useEffect } from 'react';
 import useAuthStore from './store/authStore';
 import Dashboard from './pages/Dashboard';
 import Town from './pages/Town';
-import AuthPage from './components/AuthPage';
 import Header from './components/Header';
 
 function App() {
-  const { isAuthenticated, token, fetchCharacter } = useAuthStore();
+  const { initializeUser, fetchCharacter } = useAuthStore();
   const [currentPage, setCurrentPage] = useState('quests');
+  const [isLoading, setIsLoading] = useState(true);
     
   useEffect(() => {
-      if (isAuthenticated) {
-          fetchCharacter();
-      }
-  }, [isAuthenticated, token, fetchCharacter]);
+    const init = async () => {
+      await initializeUser();
+      await fetchCharacter();
+      setIsLoading(false);
+    };
+    init();
+  }, [initializeUser, fetchCharacter]);
 
-  if (!isAuthenticated) {
-    return <AuthPage />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading your adventure...</div>
+      </div>
+    );
   }
 
   return (

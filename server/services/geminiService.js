@@ -9,6 +9,12 @@ const openrouter = axios.create({
 });
 
 const parseAIResponse = (aiResponse) => {
+  // Check if response structure is valid
+  if (!aiResponse?.data?.choices?.[0]?.message?.content) {
+    console.error('Invalid AI response structure:', JSON.stringify(aiResponse?.data, null, 2));
+    throw new Error('AI service returned invalid response structure');
+  }
+  
   const content = aiResponse.data.choices[0].message.content;
   
   // Check if content is empty or undefined
@@ -69,31 +75,56 @@ const getQuestsFromAI = async (goal) => {
 };
 
 const getLootFromAI = async (completedTask) => {
-  const model = 'mistralai/mistral-7b-instruct:free';
+  // Try multiple models in case one is rate-limited
+  const models = [
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'mistralai/mistral-7b-instruct:free'
+  ];
 
-  const prompt = `
-    A hero in our world just completed this real-world task: "${completedTask}".
-    Generate a single, thematic, fantasy loot item as a reward.
-    Provide an "itemName", a "description", and a "type" (e.g., 'Weapon', 'Armor', 'Scroll').
-    
-    Additionally, create an "imagePrompt". This prompt should be a concise, descriptive phrase for a text-to-image model to generate a stylistic, transparent PNG of the item. The style should be like a video game inventory icon.
-    
-    Return your response ONLY as a valid JSON object. Do not include any other text.
-    Example format:
-    {
-      "itemName": "Tome of Diligence",
-      "description": "A book that grants +5 to focus on tedious tasks.",
-      "type": "Scroll",
-      "imagePrompt": "Stylized fantasy spellbook icon, glowing runes, vibrant colors, transparent background, game asset"
-    }
-  `;
+  const prompt = `A hero completed: "${completedTask}".
+Generate a fantasy loot item as JSON ONLY (keep description under 80 characters):
+{
+  "itemName": "Creative fantasy item name",
+  "description": "Brief description (max 80 chars)",
+  "type": "Weapon|Armor|Scroll|Potion|Trinket",
+  "rarity": "Common|Uncommon|Rare|Epic|Legendary (weighted: 40% Common, 30% Uncommon, 20% Rare, 8% Epic, 2% Legendary)",
+  "imagePrompt": "Simple game icon: [item], fantasy RPG style, transparent background"
+}`;
 
-  const response = await openrouter.post('/chat/completions', {
-    model: model,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  let lastError;
   
-  return parseAIResponse(response);
+  for (const model of models) {
+    try {
+      console.log(`Attempting loot generation with model: ${model}`);
+      
+      const response = await openrouter.post('/chat/completions', {
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500
+      });
+      
+      const loot = parseAIResponse(response);
+      console.log(`Successfully generated loot with ${model}:`, loot);
+      return loot;
+      
+    } catch (error) {
+      console.error(`Failed with model ${model}:`, error.message);
+      lastError = error;
+      
+      // If rate limited, try next model immediately
+      if (error.response?.status === 429) {
+        continue;
+      }
+      
+      // For other errors, wait a bit before trying next model
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  // If all models failed, throw the last error
+  throw lastError || new Error('All AI models failed to generate loot');
 };
 
 module.exports = { getQuestsFromAI, getLootFromAI };

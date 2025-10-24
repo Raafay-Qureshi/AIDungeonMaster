@@ -13,6 +13,58 @@ const createUploadsDir = async () => {
   }
 };
 
+// Try Puter.com txt2img API
+const generateWithPuter = async (prompt) => {
+  console.log('Attempting image generation with Puter.com...');
+  
+  try {
+    const response = await axios.post(
+      'https://api.puter.com/drivers/txt2img',
+      {
+        prompt: prompt,
+        width: 512,
+        height: 512
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.PUTER_API_KEY || ''}`
+        },
+        responseType: 'arraybuffer',
+        timeout: 30000
+      }
+    );
+    
+    console.log('Puter.com image generation successful');
+    return Buffer.from(response.data);
+  } catch (error) {
+    console.error('Puter.com generation failed:', error.message);
+    throw error;
+  }
+};
+
+// Fallback to Pollinations.ai
+const generateWithPollinations = async (prompt) => {
+  console.log('Attempting image generation with Pollinations.ai...');
+  
+  try {
+    // Pollinations.ai provides a simple URL-based API
+    const encodedPrompt = encodeURIComponent(prompt);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true`;
+    
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000
+    });
+    
+    console.log('Pollinations.ai image generation successful');
+    return Buffer.from(response.data);
+  } catch (error) {
+    console.error('Pollinations.ai generation failed:', error.message);
+    throw error;
+  }
+};
+
 const generateImageFromPrompt = async (req, res) => {
   console.log("=== IMAGE GENERATION REQUEST RECEIVED ===");
   console.log("Request body:", req.body);
@@ -49,46 +101,31 @@ const generateImageFromPrompt = async (req, res) => {
       }
     }
 
-    console.log(`Generating new image using Cloudflare Workers AI for prompt: "${prompt}"`);
+    console.log(`Generating new image for prompt: "${prompt}"`);
 
-    // Check for required environment variables
-    if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN) {
-      console.error("Missing Cloudflare credentials in environment variables");
-      return res.status(500).json({
-        message: "Image generation service not properly configured. Please contact administrator."
-      });
-    }
+    let imageBuffer;
+    let generationMethod = 'unknown';
 
-    const response = await axios.post(
-      `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
-      {
-        prompt: prompt
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        responseType: 'arraybuffer' // Important: Get binary data directly
+    // Try Puter.com first, then fallback to Pollinations.ai
+    try {
+      imageBuffer = await generateWithPuter(prompt);
+      generationMethod = 'puter';
+    } catch (puterError) {
+      console.log('Falling back to Pollinations.ai');
+      try {
+        imageBuffer = await generateWithPollinations(prompt);
+        generationMethod = 'pollinations';
+      } catch (pollinationsError) {
+        throw new Error('All image generation services failed');
       }
-    );
-
-    // The response from Cloudflare Workers AI is binary PNG data
-    const imageData = response.data;
-    if (!imageData) {
-      throw new Error('No image data received from Cloudflare API');
     }
 
-    // Convert array buffer to buffer
-    const imageBuffer = Buffer.from(imageData);
-
-    console.log(`Image generated successfully, response size: ${imageBuffer.length} bytes`);
+    console.log(`Image generated successfully using ${generationMethod}, size: ${imageBuffer.length} bytes`);
 
     // Create uploads directory
     await createUploadsDir();
 
     // Save the image to disk and update database if characterId and itemName provided
-    let savedImagePath = null;
     if (characterId && itemName) {
       // Create unique filename
       const timestamp = Date.now();
@@ -97,7 +134,6 @@ const generateImageFromPrompt = async (req, res) => {
       
       // Save image to disk
       await fs.writeFile(imagePath, imageBuffer);
-      savedImagePath = filename;
 
       // Update character inventory with image URL
       await Character.findByIdAndUpdate(
@@ -125,42 +161,12 @@ const generateImageFromPrompt = async (req, res) => {
     res.send(imageBuffer);
     
   } catch (error) {
-    // Parse error response if it's a buffer
-    let errorMessage = error.message;
-    if (error.response?.data) {
-      try {
-        const errorData = Buffer.isBuffer(error.response.data) 
-          ? JSON.parse(error.response.data.toString()) 
-          : error.response.data;
-        console.error("Cloudflare Workers AI API Error:", errorData);
-        errorMessage = errorData.errors?.[0]?.message || errorData.message || error.message;
-      } catch (parseError) {
-        console.error("Error parsing Cloudflare response:", error.response.data);
-      }
-    }
+    console.error("Image generation failed:", error.message);
     
-    console.error("Cloudflare Workers AI image generation failed:", errorMessage);
-    
-    // Handle different types of errors
-    if (error.response?.status === 401) {
-      return res.status(500).json({
-        message: "Image generation service authentication failed. Please contact administrator.",
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      });
-    } else if (error.response?.status === 429) {
-      return res.status(429).json({
-        message: "Image generation service is currently rate limited. Please try again in a moment."
-      });
-    } else if (error.response?.status >= 500) {
-      return res.status(500).json({
-        message: "Image generation service is temporarily unavailable. Please try again later."
-      });
-    } else {
-      return res.status(500).json({
-        message: "Image generation failed. Please try again later.",
-        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      });
-    }
+    return res.status(500).json({
+      message: "Image generation failed. Please try again later.",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

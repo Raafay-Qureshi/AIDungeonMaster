@@ -33,7 +33,7 @@ const Inventory = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {character.inventory.map((item, index) => (
                     <InventoryItemCard
-                        key={index}
+                        key={`${item.itemName}-${index}`}
                         item={item}
                         characterId={character._id}
                         onClick={handleItemClick}
