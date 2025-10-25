@@ -2,7 +2,7 @@
 
 A gamified productivity platform that turns personal goals into RPG quests. AI generates quest breakdowns and fantasy loot items to reward you for completing tasks.
 
-## Try it out
+## Try it out (no signup necessary)
 
 ### [AI Dungeon Master Demo](https://ai-dungeon-master-l6d5.vercel.app/)
 
