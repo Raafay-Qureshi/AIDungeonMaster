@@ -61,9 +61,9 @@ const parseAIResponse = (aiResponse) => {
 const getQuestsFromAI = async (goal) => {
   // Try multiple models in case one is rate-limited or overloaded
   const models = [
-    'google/gemini-2.0-flash-exp:free',
-    'meta-llama/llama-3.1-8b-instruct:free',
-    'mistralai/mistral-7b-instruct:free'
+    'moonshotai/kimi-k2-thinking',
+    'meta-llama/llama-3.1-8b-instruct',
+    'google/gemini-3.1-flash-lite-preview'
   ];
 
   const prompt = `
