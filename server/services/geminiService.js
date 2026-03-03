@@ -59,19 +59,57 @@ const parseAIResponse = (aiResponse) => {
 };
 
 const getQuestsFromAI = async (goal) => {
+  // Try multiple models in case one is rate-limited or overloaded
+  const models = [
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'mistralai/mistral-7b-instruct:free'
+  ];
+
   const prompt = `
     You are a Project Dungeon Master. A user wants to achieve the following goal: "${goal}".
     Break this goal down into 5 to 7 sequential, actionable steps.
     For each step, provide a fantasy-themed "title", a short narrative "description", and a concrete real-world "task".
     Return your response ONLY as a valid JSON array of objects. Do not include any other text or explanation.
   `;
-  
-  const response = await openrouter.post('/chat/completions', {
-    model: 'mistralai/mistral-7b-instruct:free',
-    messages: [{ role: 'user', content: prompt }],
-  });
 
-  return parseAIResponse(response);
+  let lastError;
+
+  for (const model of models) {
+    try {
+      console.log(`Attempting quest generation with model: ${model}`);
+
+      const response = await openrouter.post('/chat/completions', {
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const quests = parseAIResponse(response);
+
+      if (!Array.isArray(quests) || quests.length === 0) {
+        throw new Error(`Model ${model} returned non-array or empty quest list`);
+      }
+
+      console.log(`Successfully generated ${quests.length} quests with ${model}`);
+      return quests;
+
+    } catch (error) {
+      console.error(`Failed quest generation with model ${model}:`, error.message);
+      lastError = error;
+
+      // If rate limited, try next model immediately
+      if (error.response?.status === 429) {
+        continue;
+      }
+
+      // For other errors, wait a bit before trying next model
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw lastError || new Error('All AI models failed to generate quests');
 };
 
 const getLootFromAI = async (completedTask) => {
